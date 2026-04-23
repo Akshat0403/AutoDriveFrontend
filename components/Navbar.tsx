@@ -15,31 +15,36 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const mobileDropdownRef = useRef<HTMLDivElement>(null);
 
+  // ── Load user from localStorage on mount + listen for auth changes ──
   useEffect(() => {
-    const stored = localStorage.getItem("ad_user");
-    if (stored) setUser(JSON.parse(stored));
-
-    const onStorage = () => {
-      const s = localStorage.getItem("ad_user");
-      setUser(s ? JSON.parse(s) : null);
+    const syncUser = () => {
+      const stored = localStorage.getItem("ad_user");
+      setUser(stored ? JSON.parse(stored) : null);
     };
 
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("ad_auth_change", onStorage); // ← custom event
+    syncUser(); // initial load
+
+    // Listen for same-tab auth changes (login/logout)
+    window.addEventListener("ad_auth_change", syncUser);
+    // Listen for cross-tab changes
+    window.addEventListener("storage", syncUser);
+
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("ad_auth_change", onStorage);
+      window.removeEventListener("ad_auth_change", syncUser);
+      window.removeEventListener("storage", syncUser);
     };
   }, []);
 
+  // ── Scroll shadow ──
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close dropdown when clicking outside
+  // ── Close desktop dropdown on outside click ──
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -53,12 +58,13 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // ── Sign out ──
   function handleLogout() {
-    localStorage.removeItem("ad_user");
-    setUser(null);
+    localStorage.removeItem("ad_user"); // clear session
+    setUser(null); // update React state immediately
     setDropdownOpen(false);
     setMenuOpen(false);
-    window.dispatchEvent(new Event("ad_auth_change")); // ← fire the event
+    window.dispatchEvent(new Event("ad_auth_change")); // notify other components
     router.push("/");
   }
 
@@ -72,156 +78,162 @@ export default function Navbar() {
 
   const avatarLetter = user?.name?.charAt(0).toUpperCase() ?? "U";
 
-  const UserDropdown = () => (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
-      <button
-        onClick={() => setDropdownOpen((v) => !v)}
+  // ── Shared dropdown content ──
+  function DropdownContent() {
+    return (
+      <div
         style={{
-          width: "38px",
-          height: "38px",
-          borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--blue), #6366f1)",
-          border: "2px solid rgba(255,255,255,0.15)",
-          color: "white",
-          fontWeight: 700,
-          fontSize: "1rem",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius)",
+          padding: "1rem",
+          minWidth: "220px",
+          zIndex: 999,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
         }}
-        title={user?.name}
       >
-        {avatarLetter}
-      </button>
-
-      {dropdownOpen && (
+        {/* Avatar + name header */}
         <div
           style={{
-            position: "absolute",
-            right: 0,
-            top: "48px",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius)",
-            padding: "1rem",
-            minWidth: "220px",
-            zIndex: 999,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            marginBottom: "1rem",
           }}
         >
-          {/* Avatar + name header */}
           <div
             style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, var(--blue), #6366f1)",
               display: "flex",
               alignItems: "center",
-              gap: "0.75rem",
-              marginBottom: "1rem",
+              justifyContent: "center",
+              fontWeight: 700,
+              fontSize: "1.1rem",
+              color: "white",
+              flexShrink: 0,
             }}
           >
+            {avatarLetter}
+          </div>
+          <div>
             <div
               style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, var(--blue), #6366f1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
                 fontWeight: 700,
-                fontSize: "1.1rem",
-                color: "white",
-                flexShrink: 0,
+                color: "var(--text-white)",
+                fontSize: "0.95rem",
               }}
             >
-              {avatarLetter}
+              {user?.name}
             </div>
-            <div>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "var(--text-white)",
-                  fontSize: "0.95rem",
-                }}
-              >
-                {user?.name}
-              </div>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--text-light)",
-                  marginTop: "2px",
-                }}
-              >
-                {user?.email}
-              </div>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-light)",
+                marginTop: "2px",
+              }}
+            >
+              {user?.email}
             </div>
           </div>
-
-          {/* Divider */}
-          <div
-            style={{
-              height: "1px",
-              background: "var(--border)",
-              margin: "0.75rem 0",
-            }}
-          />
-
-          {/* Details */}
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: "var(--text-light)",
-              marginBottom: "0.75rem",
-            }}
-          >
-            {user?.phone && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "0.4rem",
-                }}
-              >
-                <span>Phone</span>
-                <span style={{ color: "var(--text-white)" }}>{user.phone}</span>
-              </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Member</span>
-              <span style={{ color: "#10b981" }}>✓ Active</span>
-            </div>
-          </div>
-
-          <div
-            style={{
-              height: "1px",
-              background: "var(--border)",
-              margin: "0.75rem 0",
-            }}
-          />
-
-          {/* Sign out */}
-          <button
-            onClick={handleLogout}
-            style={{
-              width: "100%",
-              background: "rgba(239,68,68,0.1)",
-              color: "#ef4444",
-              border: "1px solid rgba(239,68,68,0.25)",
-              borderRadius: "var(--radius-sm)",
-              padding: "0.5rem 0.75rem",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.85rem",
-            }}
-          >
-            Sign Out
-          </button>
         </div>
-      )}
-    </div>
-  );
+
+        <div
+          style={{
+            height: "1px",
+            background: "var(--border)",
+            margin: "0.75rem 0",
+          }}
+        />
+
+        <div
+          style={{
+            fontSize: "0.8rem",
+            color: "var(--text-light)",
+            marginBottom: "0.75rem",
+          }}
+        >
+          {user?.phone && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "0.4rem",
+              }}
+            >
+              <span>Phone</span>
+              <span style={{ color: "var(--text-white)" }}>{user.phone}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Member</span>
+            <span style={{ color: "#10b981" }}>✓ Active</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            height: "1px",
+            background: "var(--border)",
+            margin: "0.75rem 0",
+          }}
+        />
+
+        <button
+          onClick={handleLogout}
+          style={{
+            width: "100%",
+            background: "rgba(239,68,68,0.1)",
+            color: "#ef4444",
+            border: "1px solid rgba(239,68,68,0.25)",
+            borderRadius: "var(--radius-sm)",
+            padding: "0.5rem 0.75rem",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+          }}
+        >
+          Sign Out
+        </button>
+      </div>
+    );
+  }
+
+  // ── Desktop user avatar + dropdown ──
+  function UserDropdown() {
+    return (
+      <div ref={dropdownRef} style={{ position: "relative" }}>
+        <button
+          onClick={() => setDropdownOpen((v) => !v)}
+          style={{
+            width: "38px",
+            height: "38px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, var(--blue), #6366f1)",
+            border: "2px solid rgba(255,255,255,0.15)",
+            color: "white",
+            fontWeight: 700,
+            fontSize: "1rem",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title={user?.name}
+        >
+          {avatarLetter}
+        </button>
+
+        {dropdownOpen && (
+          <div style={{ position: "absolute", right: 0, top: "48px" }}>
+            <DropdownContent />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -270,6 +282,7 @@ export default function Navbar() {
         </div>
       </nav>
 
+      {/* ── Mobile menu ── */}
       <div className={`mobile-menu${menuOpen ? " open" : ""}`} id="mobileMenu">
         {links.map((l) => (
           <Link
@@ -294,167 +307,70 @@ export default function Navbar() {
           >
             Test Drive
           </Link>
-          // Replace <UserDropdown /> in nav-actions with this:
+
           {user ? (
-            <div ref={dropdownRef} style={{ position: "relative" }}>
+            <div ref={mobileDropdownRef} style={{ position: "relative" }}>
               <button
                 onClick={() => setDropdownOpen((v) => !v)}
                 style={{
-                  width: "38px",
-                  height: "38px",
-                  borderRadius: "50%",
+                  width: "100%",
+                  padding: "0.6rem 1rem",
+                  borderRadius: "8px",
                   background: "linear-gradient(135deg, var(--blue), #6366f1)",
-                  border: "2px solid rgba(255,255,255,0.15)",
+                  border: "none",
                   color: "white",
                   fontWeight: 700,
-                  fontSize: "1rem",
+                  fontSize: "0.9rem",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#000000",
+                  gap: "0.5rem",
                 }}
-                title={user.name}
               >
-                {avatarLetter}
+                <span
+                  style={{
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "50%",
+                    background: "rgba(255,255,255,0.25)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {avatarLetter}
+                </span>
+                {user.name}
               </button>
 
               {dropdownOpen && (
                 <div
                   style={{
                     position: "absolute",
+                    left: 0,
                     right: 0,
                     top: "48px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius)",
-                    padding: "1rem",
-                    minWidth: "220px",
                     zIndex: 999,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
                   }}
                 >
-                  {/* Avatar + name */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.75rem",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "42px",
-                        height: "42px",
-                        borderRadius: "50%",
-                        background:
-                          "linear-gradient(135deg, var(--blue), #6366f1)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 700,
-                        fontSize: "1.1rem",
-                        color: "white",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {avatarLetter}
-                    </div>
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          color: "var(--text-white)",
-                          fontSize: "0.95rem",
-                        }}
-                      >
-                        {user.name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "var(--text-light)",
-                          marginTop: "2px",
-                        }}
-                      >
-                        {user.email}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      height: "1px",
-                      background: "var(--border)",
-                      margin: "0.75rem 0",
-                    }}
-                  />
-
-                  <div
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "var(--text-light)",
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    {user.phone && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "0.4rem",
-                        }}
-                      >
-                        <span>Phone</span>
-                        <span style={{ color: "var(--text-white)" }}>
-                          {user.phone}
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span>Member</span>
-                      <span style={{ color: "#10b981" }}>✓ Active</span>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      height: "1px",
-                      background: "var(--border)",
-                      margin: "0.75rem 0",
-                    }}
-                  />
-
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      width: "100%",
-                      background: "rgba(239,68,68,0.1)",
-                      color: "#ef4444",
-                      border: "1px solid rgba(239,68,68,0.25)",
-                      borderRadius: "var(--radius-sm)",
-                      padding: "0.5rem 0.75rem",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    Sign Out
-                  </button>
+                  <DropdownContent />
                 </div>
               )}
             </div>
           ) : (
-            <Link href="/login" className="nav-btn-outline">
+            <Link
+              href="/login"
+              className="btn btn-outline btn-sm"
+              style={{ justifyContent: "center" }}
+              onClick={() => setMenuOpen(false)}
+            >
               Login
             </Link>
           )}
+
           <Link
             href="/cars"
             className="btn btn-primary btn-sm"

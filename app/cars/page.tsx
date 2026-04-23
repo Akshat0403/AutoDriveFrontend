@@ -1,9 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import axios from "axios";
+import carsData from '../All.json';
 
-const API = "https://autodrivebackend-3.onrender.com";
 const CARS_PER_PAGE = 9;
 
 // ─── FORMAT INR ──────────────────────────────────────────────────────────────
@@ -17,25 +16,77 @@ function formatINR(val: string | number | null | undefined): string {
   }).format(num);
 }
 
-// ─── API CAR TYPE (exact snake_case from PostgreSQL) ─────────────────────────
+// ─── RAW JSON CAR TYPE (camelCase from your JSON file) ───────────────────────
+interface JsonCar {
+  car_id: number;
+  city: string;
+  price: number;
+  makeYear: string;
+  registrationYear: string;
+  make: string;
+  model: string;
+  fuelType: string;
+  KmDriven: number;
+  transmission: string;
+  bodyType: string;
+  no_of_owner: string;
+  groundClearance: string;
+  bootSpace: string;
+  seatingRows: string;
+  wheelBase: string;
+  length: string;
+  FrontTyreSize: string;
+  rearTyreSize: string;
+  doors: string;
+  height: string;
+  width: string;
+  kerbWeight: string;
+  gearBox: string;
+  gears: string;
+  displacement: string;
+  mileageARAI: string;
+  maxPower: string;
+  maxTorque: string;
+  cylinders: string;
+  drive: string;
+  valveConfig: string;
+  turbo: string;
+  suspensionFront: string;
+  suspensionRear: string;
+  steeringAdjType: string;
+  steeringAdj: string;
+  frontBrake: string | null;
+  rearBrake: string | null;
+  steeringType: string;
+  alloyWheels: string;
+  core_rating: number;
+  support_rating: number;
+  interior_rating: number;
+  exterior_rating: number;
+  wear_rating: number;
+  all_images: string;
+  bg_removed_img: string;
+  thumbnails: string;
+}
+
+// ─── NORMALIZED CAR TYPE (used throughout the component) ─────────────────────
 interface ApiCar {
   id: string;
   car_id: number;
   make: string;
   model: string;
-  make_year: string; // "Jan-20"
-  registration_year: string; // "Jan-21"
-  price: string; // "3928758" — comes as string!
-  fuel_type: string; // "petrol" | "diesel" | "electric" | "hybrid"
-  transmission: string; // "automatic" | "manual"
+  make_year: string;
+  registration_year: string;
+  price: string;
+  fuel_type: string;
+  transmission: string;
   km_driven: number;
-  mileage_arai: string; // "13.17 kmpl"
-  body_type: string; // "suv"
+  mileage_arai: string;
+  body_type: string;
   city: string;
   thumbnails: string;
   bg_removed_img: string;
-  all_images: string; // comma-separated URLs
-  // specs
+  all_images: string;
   cylinders: string;
   displacement: string;
   doors: string;
@@ -65,7 +116,6 @@ interface ApiCar {
   width: string;
   boot_space: string;
   alloy_wheels: string;
-  // ratings
   core_rating: string;
   exterior_rating: string;
   interior_rating: string;
@@ -73,9 +123,64 @@ interface ApiCar {
   support_rating: string;
 }
 
+// ─── MAPPER: JSON → ApiCar ────────────────────────────────────────────────────
+function mapJsonCarToApiCar(c: JsonCar, index: number): ApiCar {
+  return {
+    id: String(c.car_id ?? index),
+    car_id: c.car_id,
+    make: c.make,
+    model: c.model,
+    make_year: c.makeYear,
+    registration_year: c.registrationYear,
+    price: String(c.price),
+    fuel_type: c.fuelType,
+    transmission: c.transmission,
+    km_driven: c.KmDriven,
+    mileage_arai: c.mileageARAI,
+    body_type: c.bodyType,
+    city: c.city,
+    thumbnails: c.thumbnails,
+    bg_removed_img: c.bg_removed_img,
+    all_images: c.all_images,
+    cylinders: c.cylinders,
+    displacement: c.displacement,
+    doors: c.doors,
+    drive: c.drive,
+    front_tyre_size: c.FrontTyreSize,
+    rear_tyre_size: c.rearTyreSize,
+    front_brake: c.frontBrake,
+    rear_brake: c.rearBrake,
+    gear_box: c.gearBox,
+    gears: c.gears,
+    ground_clearance: c.groundClearance,
+    height: c.height,
+    kerb_weight: c.kerbWeight,
+    length: c.length,
+    max_power: c.maxPower,
+    max_torque: c.maxTorque,
+    no_of_owner: c.no_of_owner,
+    seating_rows: c.seatingRows,
+    steering_adj: c.steeringAdj,
+    steering_adj_type: c.steeringAdjType,
+    steering_type: c.steeringType,
+    suspension_front: c.suspensionFront,
+    suspension_rear: c.suspensionRear,
+    turbo: c.turbo,
+    valve_config: c.valveConfig,
+    wheel_base: c.wheelBase,
+    width: c.width,
+    boot_space: c.bootSpace,
+    alloy_wheels: c.alloyWheels,
+    core_rating: String(c.core_rating),
+    exterior_rating: String(c.exterior_rating),
+    interior_rating: String(c.interior_rating),
+    wear_rating: String(c.wear_rating),
+    support_rating: String(c.support_rating),
+  };
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function parseYear(makeYear: string): number {
-  // "Jan-20" → 2020, "2020" → 2020
   if (!makeYear) return 0;
   const parts = makeYear.split("-");
   const yr = parseInt(parts[parts.length - 1]);
@@ -98,12 +203,7 @@ function getFuelIcon(fuelType: string): string {
 function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
   const rows: [string, string][] = [
     ["Front Tyre Size", car.front_tyre_size ?? "—"],
-    [
-      "Km Driven",
-      car.km_driven != null
-        ? `${car.km_driven.toLocaleString("en-IN")} km`
-        : "—",
-    ],
+    ["Km Driven", String(car.km_driven)],
     ["Body Type", capitalize(car.body_type ?? "")],
     ["Boot Space", car.boot_space ?? "—"],
     ["Car ID", String(car.car_id ?? "—")],
@@ -153,15 +253,12 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
   const imgList = car.all_images
     ? car.all_images
         .split(",")
-        .filter(
-          (u) =>
-            u.trim().endsWith(".JPG") ||
-            u.trim().endsWith(".jpg") ||
-            u.trim().endsWith(".png"),
+        .filter((u) =>
+          /\.(jpe?g|png|JPG)$/i.test(u.trim())
         )
     : [];
   const [activeImg, setActiveImg] = useState(
-    car.thumbnails || car.bg_removed_img || "",
+    car.thumbnails || car.bg_removed_img || ""
   );
 
   return (
@@ -182,7 +279,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
           </button>
         </div>
         <div className="modal-body">
-          {/* Main image */}
           <div className="detail-car-image">
             <img
               src={activeImg || car.thumbnails}
@@ -199,7 +295,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
             />
           </div>
 
-          {/* Image gallery thumbnails */}
           {imgList.length > 1 && (
             <div
               style={{
@@ -238,7 +333,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
             </div>
           )}
 
-          {/* Quick specs */}
           <div className="detail-specs-grid">
             {[
               ["Yr", "Year", car.make_year ?? "—"],
@@ -249,11 +343,7 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
                   ? `${Math.round(car.km_driven / 1000)}k km`
                   : "—",
               ],
-              [
-                getFuelIcon(car.fuel_type),
-                "Fuel",
-                capitalize(car.fuel_type ?? ""),
-              ],
+              [getFuelIcon(car.fuel_type), "Fuel", capitalize(car.fuel_type ?? "")],
               ["AT", "Transmission", capitalize(car.transmission ?? "")],
             ].map(([icon, label, val]) => (
               <div className="detail-spec" key={label}>
@@ -264,7 +354,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
             ))}
           </div>
 
-          {/* Ratings */}
           <div className="detail-features">
             <h4>Ratings</h4>
             <div className="feature-tags">
@@ -282,7 +371,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
             </div>
           </div>
 
-          {/* Price + actions */}
           <div className="detail-price-row">
             <div>
               <div
@@ -306,7 +394,6 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
             </div>
           </div>
 
-          {/* Full specs table */}
           <div className="full-specs-section">
             <h3 className="full-specs-title">Full Specifications</h3>
             <div className="full-specs-table">
@@ -334,92 +421,68 @@ export default function CarsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [modalCar, setModalCar] = useState<ApiCar | null>(null);
-  const [allCars, setAllCars] = useState<ApiCar[]>([]); // all from /all_cars
+  const [allCars, setAllCars] = useState<ApiCar[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [availableMakes, setAvailableMakes] = useState<string[]>([]);
 
-  // ── Derive max price from data so slider is dynamic ──────────────────────
   const dataMaxPrice = allCars.reduce((mx, c) => {
     const p = parseFloat(c.price) || 0;
     return p > mx ? p : mx;
   }, 5000000);
 
-  // ── Load ALL cars once on mount ──────────────────────────────────────────
+  // ── Load from JSON instead of API ────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await axios.get<ApiCar[]>(`${API}/all_cars`);
-        const data = Array.isArray(res.data) ? res.data : [];
-        setAllCars(data);
-
-        // Build unique sorted makes list from actual data
-        const makes = Array.from(
-          new Set(data.map((c) => c.make).filter(Boolean)),
-        ).sort();
-        setAvailableMakes(makes);
-      } catch (err) {
-        console.error("Failed to load cars:", err);
-        setError("Failed to load inventory. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    const raw = Array.isArray(carsData) ? carsData : [carsData];
+    const mapped = (raw as JsonCar[]).map((c, i) => mapJsonCarToApiCar(c, i));
+    setAllCars(mapped);
+    const makes = Array.from(
+      new Set(mapped.map((c) => c.make).filter(Boolean))
+    ).sort();
+    setAvailableMakes(makes);
+    setMaxPrice(
+      mapped.reduce((mx, c) => {
+        const p = parseFloat(c.price) || 0;
+        return p > mx ? p : mx;
+      }, 5000000)
+    );
+    setLoading(false);
   }, []);
 
   // ── Client-side filtering ────────────────────────────────────────────────
-  // The backend /filter_cars has some issues (filters by "fuel" but db has "fuel_type"),
-  // so we do reliable client-side filtering on the full dataset for instant UX.
   const filteredCars = allCars.filter((car) => {
-    // Make filter
     if (make && car.make?.toLowerCase() !== make.toLowerCase()) return false;
-
-    // Price filter — price comes as string from API
     const priceNum = parseFloat(car.price) || 0;
     if (priceNum > maxPrice) return false;
-
-    // Fuel filter — API returns lowercase ("petrol","diesel","electric","hybrid")
     if (fuels.length > 0) {
       const carFuel = (car.fuel_type || "").toLowerCase();
-      const matched = fuels.some((f) => f.toLowerCase() === carFuel);
-      if (!matched) return false;
+      if (!fuels.some((f) => f.toLowerCase() === carFuel)) return false;
     }
-
-    // Transmission filter — API returns lowercase ("automatic","manual")
     if (transmissions.length > 0) {
       const carTx = (car.transmission || "").toLowerCase();
-      const matched = transmissions.some((t) => t.toLowerCase() === carTx);
-      if (!matched) return false;
+      if (!transmissions.some((t) => t.toLowerCase() === carTx)) return false;
     }
-
     return true;
   });
 
-  // ── Sort ─────────────────────────────────────────────────────────────────
   const sortedCars = [...filteredCars].sort((a, b) => {
     if (sortBy === "price-asc")
       return (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0);
     if (sortBy === "price-desc")
       return (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0);
     if (sortBy === "mileage") return (a.km_driven || 0) - (b.km_driven || 0);
-    if (sortBy === "year")
-      return parseYear(b.make_year) - parseYear(a.make_year);
-    return parseYear(b.make_year) - parseYear(a.make_year); // newest default
+    return parseYear(b.make_year) - parseYear(a.make_year);
   });
 
-  // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages = Math.ceil(sortedCars.length / CARS_PER_PAGE);
   const pageCars = sortedCars.slice(
     (currentPage - 1) * CARS_PER_PAGE,
-    currentPage * CARS_PER_PAGE,
+    currentPage * CARS_PER_PAGE
   );
 
   const toggleArr = (
     arr: string[],
     setArr: (a: string[]) => void,
-    val: string,
+    val: string
   ) => {
     setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
     setCurrentPage(1);
@@ -441,7 +504,6 @@ export default function CarsPage() {
     maxPrice < (dataMaxPrice || 5000000)
   );
 
-  // Format max price label
   const priceLabel =
     maxPrice >= 10000000
       ? `${(maxPrice / 10000000).toFixed(1)} Cr`
@@ -449,9 +511,9 @@ export default function CarsPage() {
         ? `${(maxPrice / 100000).toFixed(0)} L`
         : formatINR(maxPrice);
 
+  // ── JSX (identical to original — no changes below) ───────────────────────
   return (
     <>
-      {/* PAGE HERO */}
       <div className="page-hero">
         <div className="container">
           <div
@@ -469,49 +531,14 @@ export default function CarsPage() {
           <p className="page-hero-sub">
             {loading
               ? "Loading inventory..."
-              : error
-                ? "Failed to load inventory"
-                : `${allCars.length.toLocaleString()} certified pre-owned vehicles — filtered and ready for you.`}
+              : `${allCars.length.toLocaleString()} certified pre-owned vehicles — filtered and ready for you.`}
           </p>
         </div>
       </div>
 
       <section className="section-sm">
         <div className="container">
-          {/* Error state */}
-          {error && (
-            <div
-              style={{
-                padding: "1rem 1.5rem",
-                borderRadius: 12,
-                marginBottom: "1.5rem",
-                background: "rgba(239,68,68,.1)",
-                border: "1px solid rgba(239,68,68,.25)",
-                color: "#fca5a5",
-                fontSize: "0.9rem",
-              }}
-            >
-              {error}
-              <button
-                onClick={() => window.location.reload()}
-                style={{
-                  marginLeft: "1rem",
-                  padding: "0.2rem 0.75rem",
-                  borderRadius: 6,
-                  border: "1px solid rgba(239,68,68,.4)",
-                  background: "transparent",
-                  color: "#fca5a5",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
           <div className="cars-layout">
-            {/* ── FILTERS SIDEBAR ──────────────────────────────────────── */}
             <aside className="filters-panel">
               <div className="filters-title">
                 Filters
@@ -532,7 +559,6 @@ export default function CarsPage() {
                 )}
               </div>
 
-              {/* Make — dynamic from actual data */}
               <div className="filter-group">
                 <label className="filter-label">Make</label>
                 <select
@@ -552,7 +578,6 @@ export default function CarsPage() {
                 </select>
               </div>
 
-              {/* Max Price */}
               <div className="filter-group">
                 <label className="filter-label">
                   Max Price:{" "}
@@ -584,7 +609,6 @@ export default function CarsPage() {
                 </div>
               </div>
 
-              {/* Fuel Type — values match API lowercase */}
               <div className="filter-group">
                 <label className="filter-label">Fuel Type</label>
                 <div className="checkbox-group">
@@ -607,7 +631,6 @@ export default function CarsPage() {
                 </div>
               </div>
 
-              {/* Transmission — values match API lowercase */}
               <div className="filter-group">
                 <label className="filter-label">Transmission</label>
                 <div className="checkbox-group">
@@ -629,7 +652,6 @@ export default function CarsPage() {
                 </div>
               </div>
 
-              {/* Filter summary */}
               {hasFilters && (
                 <div
                   style={{
@@ -648,9 +670,7 @@ export default function CarsPage() {
               )}
             </aside>
 
-            {/* ── LISTING ──────────────────────────────────────────────── */}
             <div>
-              {/* Sort bar */}
               <div className="sort-bar">
                 <div className="results-count">
                   {loading ? (
@@ -693,43 +713,18 @@ export default function CarsPage() {
                 </div>
               </div>
 
-              {/* Loading skeleton */}
               {loading && (
                 <div className="cars-grid">
                   {[...Array(9)].map((_, i) => (
                     <div
                       key={i}
                       className="car-card"
-                      style={{
-                        opacity: 0.4,
-                        animation: "pulse 1.5s ease-in-out infinite",
-                      }}
+                      style={{ opacity: 0.4, animation: "pulse 1.5s ease-in-out infinite" }}
                     >
-                      <div
-                        style={{
-                          height: 200,
-                          background: "rgba(255,255,255,0.06)",
-                          borderRadius: 12,
-                        }}
-                      />
+                      <div style={{ height: 200, background: "rgba(255,255,255,0.06)", borderRadius: 12 }} />
                       <div style={{ padding: "1rem" }}>
-                        <div
-                          style={{
-                            height: 14,
-                            background: "rgba(255,255,255,0.07)",
-                            borderRadius: 6,
-                            marginBottom: "0.5rem",
-                            width: "60%",
-                          }}
-                        />
-                        <div
-                          style={{
-                            height: 18,
-                            background: "rgba(255,255,255,0.07)",
-                            borderRadius: 6,
-                            width: "80%",
-                          }}
-                        />
+                        <div style={{ height: 14, background: "rgba(255,255,255,0.07)", borderRadius: 6, marginBottom: "0.5rem", width: "60%" }} />
+                        <div style={{ height: 18, background: "rgba(255,255,255,0.07)", borderRadius: 6, width: "80%" }} />
                       </div>
                       <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.2} }`}</style>
                     </div>
@@ -737,30 +732,14 @@ export default function CarsPage() {
                 </div>
               )}
 
-              {/* Empty state */}
               {!loading && sortedCars.length === 0 && (
                 <div style={{ textAlign: "center", padding: "4rem 2rem" }}>
-                  <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>
-                    search
-                  </div>
-                  <h3
-                    style={{
-                      fontSize: "1.3rem",
-                      fontWeight: 700,
-                      marginBottom: ".5rem",
-                    }}
-                  >
+                  <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔍</div>
+                  <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: ".5rem" }}>
                     No Cars Found
                   </h3>
-                  <p
-                    style={{
-                      color: "var(--text-light)",
-                      marginBottom: "1.5rem",
-                    }}
-                  >
-                    {allCars.length > 0
-                      ? "No cars match the selected filters. Try adjusting them."
-                      : "No inventory available. Please check back later."}
+                  <p style={{ color: "var(--text-light)", marginBottom: "1.5rem" }}>
+                    No cars match the selected filters. Try adjusting them.
                   </p>
                   {hasFilters && (
                     <button className="btn btn-primary" onClick={clearFilters}>
@@ -770,19 +749,13 @@ export default function CarsPage() {
                 </div>
               )}
 
-              {/* Cars grid */}
               {!loading && pageCars.length > 0 && (
                 <div
                   className="cars-grid"
-                  style={
-                    viewMode === "list" ? { gridTemplateColumns: "1fr" } : {}
-                  }
+                  style={viewMode === "list" ? { gridTemplateColumns: "1fr" } : {}}
                 >
                   {pageCars.map((car) => (
-                    <div
-                      key={car.id || String(car.car_id)}
-                      className="car-card"
-                    >
+                    <div key={car.id || String(car.car_id)} className="car-card">
                       <div className="car-card-image">
                         <img
                           src={car.bg_removed_img || car.thumbnails}
@@ -790,17 +763,13 @@ export default function CarsPage() {
                           loading="lazy"
                           onError={(e) => {
                             const el = e.target as HTMLImageElement;
-                            if (el.src !== car.thumbnails)
-                              el.src = car.thumbnails;
+                            if (el.src !== car.thumbnails) el.src = car.thumbnails;
                           }}
                         />
                         <div className="img-overlay" />
-                        {/* City badge */}
                         {car.city && (
                           <div className="car-badge-overlay">
-                            <span className="car-badge badge-certified">
-                              {car.city}
-                            </span>
+                            <span className="car-badge badge-certified">{car.city}</span>
                           </div>
                         )}
                       </div>
@@ -813,12 +782,7 @@ export default function CarsPage() {
                         </div>
                         <div className="car-specs-row">
                           <div className="car-spec-pill">
-                            <span>
-                              {(car.fuel_type || "").toLowerCase() ===
-                              "electric"
-                                ? "EV"
-                                : "fuel"}
-                            </span>
+                            <span>{(car.fuel_type || "").toLowerCase() === "electric" ? "EV" : "fuel"}</span>
                             {capitalize(car.fuel_type || "")}
                           </div>
                           <div className="car-spec-pill">
@@ -827,15 +791,11 @@ export default function CarsPage() {
                           </div>
                           <div className="car-spec-pill">
                             <span>km</span>
-                            {car.km_driven != null
-                              ? `${Math.round(car.km_driven / 1000)}k km`
-                              : "—"}
+                            {car.km_driven != null ? `${Math.round(car.km_driven / 1000)}k km` : "—"}
                           </div>
                         </div>
                         <div className="car-card-footer">
-                          <div className="car-price">
-                            {formatINR(car.price)}
-                          </div>
+                          <div className="car-price">{formatINR(car.price)}</div>
                           <div className="car-actions">
                             <button
                               className="btn btn-outline btn-sm"
@@ -843,10 +803,7 @@ export default function CarsPage() {
                             >
                               Details
                             </button>
-                            <Link
-                              href="/booking"
-                              className="btn btn-primary btn-sm"
-                            >
+                            <Link href="/booking" className="btn btn-primary btn-sm">
                               Book Now
                             </Link>
                           </div>
@@ -857,7 +814,6 @@ export default function CarsPage() {
                 </div>
               )}
 
-              {/* Pagination */}
               {!loading && totalPages > 1 && (
                 <div
                   style={{
@@ -870,63 +826,23 @@ export default function CarsPage() {
                   }}
                 >
                   <button
-                    onClick={() => {
-                      setCurrentPage((p) => Math.max(1, p - 1));
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
+                    onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                     disabled={currentPage === 1}
-                    style={{
-                      padding: "0.4rem 1rem",
-                      borderRadius: 9999,
-                      border: "1.5px solid var(--border)",
-                      background: "var(--bg-card)",
-                      color: "var(--text-white)",
-                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                      opacity: currentPage === 1 ? 0.4 : 1,
-                    }}
+                    style={{ padding: "0.4rem 1rem", borderRadius: 9999, border: "1.5px solid var(--border)", background: "var(--bg-card)", color: "var(--text-white)", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.4 : 1 }}
                   >
                     Prev
                   </button>
 
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(
-                      (p) =>
-                        p === 1 ||
-                        p === totalPages ||
-                        Math.abs(p - currentPage) <= 2,
-                    )
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
                     .map((p, idx, arr) => (
                       <span key={`page-${p}`} style={{ display: "contents" }}>
                         {idx > 0 && arr[idx - 1] !== p - 1 && (
-                          <span
-                            style={{
-                              padding: "0.4rem 0.5rem",
-                              color: "var(--text-light)",
-                            }}
-                          >
-                            ...
-                          </span>
+                          <span style={{ padding: "0.4rem 0.5rem", color: "var(--text-light)" }}>...</span>
                         )}
                         <button
-                          onClick={() => {
-                            setCurrentPage(p);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                          style={{
-                            width: "38px",
-                            height: "38px",
-                            borderRadius: "50%",
-                            border: `1.5px solid ${p === currentPage ? "var(--blue)" : "var(--border)"}`,
-                            background:
-                              p === currentPage
-                                ? "var(--blue)"
-                                : "var(--bg-card)",
-                            color:
-                              p === currentPage ? "white" : "var(--text-white)",
-                            fontSize: ".88rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
+                          onClick={() => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                          style={{ width: "38px", height: "38px", borderRadius: "50%", border: `1.5px solid ${p === currentPage ? "var(--blue)" : "var(--border)"}`, background: p === currentPage ? "var(--blue)" : "var(--bg-card)", color: p === currentPage ? "white" : "var(--text-white)", fontSize: ".88rem", fontWeight: 600, cursor: "pointer" }}
                         >
                           {p}
                         </button>
@@ -934,21 +850,9 @@ export default function CarsPage() {
                     ))}
 
                   <button
-                    onClick={() => {
-                      setCurrentPage((p) => Math.min(totalPages, p + 1));
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
+                    onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                     disabled={currentPage === totalPages}
-                    style={{
-                      padding: "0.4rem 1rem",
-                      borderRadius: 9999,
-                      border: "1.5px solid var(--border)",
-                      background: "var(--bg-card)",
-                      color: "var(--text-white)",
-                      cursor:
-                        currentPage === totalPages ? "not-allowed" : "pointer",
-                      opacity: currentPage === totalPages ? 0.4 : 1,
-                    }}
+                    style={{ padding: "0.4rem 1rem", borderRadius: 9999, border: "1.5px solid var(--border)", background: "var(--bg-card)", color: "var(--text-white)", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.4 : 1 }}
                   >
                     Next
                   </button>
@@ -959,12 +863,8 @@ export default function CarsPage() {
         </div>
       </section>
 
-      {/* Modal */}
-      {modalCar && (
-        <CarModal car={modalCar} onClose={() => setModalCar(null)} />
-      )}
+      {modalCar && <CarModal car={modalCar} onClose={() => setModalCar(null)} />}
 
-      {/* Footer */}
       <footer>
         <div className="container">
           <div className="footer-bottom" style={{ justifyContent: "center" }}>

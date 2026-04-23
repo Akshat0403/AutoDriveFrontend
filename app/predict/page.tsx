@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { formatINR } from "@/lib/carData";
 
-const API = "https://autodrivebackend-3.onrender.com";
+const API = "https://autodrive-mzfo.onrender.com";
 
 interface BreakdownItem {
   l: string;
@@ -439,7 +439,7 @@ export default function PredictPage() {
                   </div>
 
                   <div className="breakdown-list" style={{ marginTop: "1rem" }}>
-                    {result.breakdown.map((item, i) => (
+                    {(result.breakdown ?? []).map((item, i) => (
                       <div key={i} className="breakdown-item">
                         <span className="bi-label">{item.l}</span>
                         <span className={`bi-val ${item.cls}`}>

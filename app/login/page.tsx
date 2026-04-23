@@ -2,9 +2,6 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-
-const API = "https://autodrivebackend-3.onrender.com";
 
 type Tab = "login" | "signup";
 
@@ -46,13 +43,13 @@ export default function LoginPage() {
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-  // ── Helpers ──────────────────────────────────────────────────
+  // ── Save user to localStorage & dispatch event ───────────────
   function saveUser(data: object) {
     localStorage.setItem("ad_user", JSON.stringify(data));
     window.dispatchEvent(new Event("ad_auth_change"));
   }
 
-  // ── Login ────────────────────────────────────────────────────
+  // ── LOGIN: match against stored accounts ─────────────────────
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     let valid = true;
@@ -70,27 +67,50 @@ export default function LoginPage() {
     if (!valid) return;
 
     setLoginLoading(true);
-    try {
-      const { data } = await axios.post(`${API}/login`, {
-        email: loginEmail,
-        password: loginPw,
-      });
 
-      if (data.success) {
-        saveUser(data);
-        setLoginSuccess(true);
-        setTimeout(() => router.push("/"), 1800);
-      } else {
-        setLoginPwErr(data.message || "Invalid credentials.");
+    // Simulate a brief loading state
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Look up all stored accounts
+    const accounts: Record<
+      string,
+      {
+        password: string;
+        name: string;
+        email: string;
+        phone?: string;
+        user_id: string;
       }
-    } catch {
-      setLoginPwErr("Login failed. Please try again.");
-    } finally {
+    > = JSON.parse(localStorage.getItem("ad_accounts") || "{}");
+
+    const account = accounts[loginEmail.toLowerCase()];
+
+    if (!account) {
+      setLoginPwErr("No account found with this email. Please sign up.");
       setLoginLoading(false);
+      return;
     }
+
+    if (account.password !== loginPw) {
+      setLoginPwErr("Incorrect password.");
+      setLoginLoading(false);
+      return;
+    }
+
+    // Success — save session
+    saveUser({
+      user_id: account.user_id,
+      name: account.name,
+      email: account.email,
+      phone: account.phone,
+    });
+
+    setLoginLoading(false);
+    setLoginSuccess(true);
+    setTimeout(() => router.push("/"), 1800);
   }
 
-  // ── Signup ───────────────────────────────────────────────────
+  // ── SIGNUP: store new account ─────────────────────────────────
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     let valid = true;
@@ -119,39 +139,44 @@ export default function LoginPage() {
     if (!valid) return;
 
     setSignupLoading(true);
-    try {
-      const { data } = await axios.post(`${API}/create_user`, {
-        firstname: suFname,
-        lastname: suLname,
-        email: suEmail,
-        phone: suPhone,
-        password: suPw,
-      });
+    await new Promise((r) => setTimeout(r, 600));
 
-      if (data.success) {
-        saveUser({
-          user_id: data.user_id,
-          name: `${suFname} ${suLname}`,
-          email: suEmail,
-          phone: suPhone,
-        });
-        setSignupSuccess(true);
-        setTimeout(() => router.push("/cars"), 1800);
-      } else {
-        setSuEmailErr(data.error || "Signup failed.");
-      }
-    } catch {
-      setSuEmailErr("Signup failed. Please try again.");
-    } finally {
+    // Check if email already registered
+    const accounts: Record<string, object> = JSON.parse(
+      localStorage.getItem("ad_accounts") || "{}",
+    );
+
+    if (accounts[suEmail.toLowerCase()]) {
+      setSuEmailErr("An account with this email already exists.");
       setSignupLoading(false);
+      return;
     }
+
+    // Generate a simple user_id
+    const user_id = `user_${Date.now()}`;
+    const fullName = `${suFname.trim()} ${suLname.trim()}`;
+
+    // Store account credentials (for future logins)
+    accounts[suEmail.toLowerCase()] = {
+      user_id,
+      name: fullName,
+      email: suEmail.toLowerCase(),
+      phone: suPhone,
+      password: suPw, // In production, never store plain-text passwords
+    };
+    localStorage.setItem("ad_accounts", JSON.stringify(accounts));
+
+    // Store active session (without password)
+    saveUser({ user_id, name: fullName, email: suEmail, phone: suPhone });
+
+    setSignupLoading(false);
+    setSignupSuccess(true);
+    setTimeout(() => router.push("/cars"), 1800);
   }
 
   return (
     <>
-      {/* ── Styles ─────────────────────────────────────────────── */}
       <style>{`
-        /* ── Variables ── */
         :root {
           --blue: #3b82f6;
           --blue-dim: rgba(59,130,246,0.15);
@@ -165,8 +190,6 @@ export default function LoginPage() {
           --radius: 14px;
           --radius-sm: 8px;
         }
-
-        /* ── Page ── */
         .auth-page {
           min-height: 100vh;
           background: var(--bg);
@@ -178,10 +201,7 @@ export default function LoginPage() {
           overflow: hidden;
           font-family: 'Segoe UI', system-ui, sans-serif;
         }
-
-        /* Ambient glows */
-        .auth-page::before,
-        .auth-page::after {
+        .auth-page::before, .auth-page::after {
           content: '';
           position: fixed;
           border-radius: 50%;
@@ -199,8 +219,6 @@ export default function LoginPage() {
           background: #6366f1;
           bottom: -100px; right: -100px;
         }
-
-        /* ── Card ── */
         .auth-card {
           background: var(--bg-card);
           border: 1px solid var(--border);
@@ -217,8 +235,6 @@ export default function LoginPage() {
           from { opacity: 0; transform: translateY(24px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-
-        /* ── Logo ── */
         .auth-logo {
           display: flex;
           align-items: center;
@@ -239,8 +255,6 @@ export default function LoginPage() {
           display: flex; align-items: center; justify-content: center;
           font-size: 1.1rem;
         }
-
-        /* ── Already logged in banner ── */
         .already-banner {
           text-align: center;
           padding: .875rem 1rem;
@@ -251,8 +265,6 @@ export default function LoginPage() {
           color: var(--text-white);
           font-size: .875rem;
         }
-
-        /* ── Tabs ── */
         .auth-tabs {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -279,16 +291,11 @@ export default function LoginPage() {
           color: #fff;
           box-shadow: 0 2px 12px rgba(59,130,246,0.35);
         }
-
-        /* ── Form body ── */
         .auth-form { display: none; }
         .auth-form.active { display: block; animation: fadeIn .3s ease both; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
         .auth-heading { font-size: 1.4rem; font-weight: 700; color: var(--text-white); margin-bottom: .25rem; }
         .auth-sub { font-size: .85rem; color: var(--text-light); margin-bottom: 1.5rem; }
-
-        /* ── Field ── */
         .field { margin-bottom: 1rem; }
         .field label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-light); margin-bottom: .35rem; letter-spacing: .03em; text-transform: uppercase; }
         .field input {
@@ -310,11 +317,7 @@ export default function LoginPage() {
         .field input.err { border-color: var(--red); }
         .field input::placeholder { color: #4a5568; }
         .field-err { font-size: .75rem; color: var(--red); margin-top: .3rem; }
-
-        /* Inline two-column fields */
         .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-
-        /* Password wrapper */
         .pw-wrap { position: relative; }
         .pw-wrap input { padding-right: 2.75rem; }
         .pw-toggle {
@@ -323,13 +326,9 @@ export default function LoginPage() {
           padding: 0; line-height: 1;
         }
         .pw-toggle:hover { color: var(--text-white); }
-
-        /* Forgot */
         .forgot { text-align: right; margin-top: -.5rem; margin-bottom: 1rem; }
         .forgot a { font-size: .8rem; color: var(--blue); text-decoration: none; }
         .forgot a:hover { text-decoration: underline; }
-
-        /* Submit */
         .auth-submit {
           width: 100%;
           background: var(--blue);
@@ -351,18 +350,12 @@ export default function LoginPage() {
         }
         .auth-submit:active:not(:disabled) { transform: translateY(0); }
         .auth-submit:disabled { opacity: .6; cursor: not-allowed; }
-
-        /* Divider */
         .divider {
           display: flex; align-items: center; gap: .75rem;
           color: var(--text-light); font-size: .8rem;
           margin: 1.25rem 0;
         }
-        .divider::before, .divider::after {
-          content: ''; flex: 1; height: 1px; background: var(--border);
-        }
-
-        /* Social */
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
         .social-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
         .social-btn {
           display: flex; align-items: center; justify-content: center; gap: .5rem;
@@ -376,27 +369,15 @@ export default function LoginPage() {
           transition: background .2s, border-color .2s;
         }
         .social-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
-
-        /* Switch link */
         .auth-switch { text-align: center; font-size: .83rem; color: var(--text-light); margin-top: 1.25rem; }
         .auth-switch a { color: var(--blue); cursor: pointer; font-weight: 600; text-decoration: none; }
         .auth-switch a:hover { text-decoration: underline; }
-
-        /* Terms */
         .auth-terms { text-align: center; font-size: .75rem; color: var(--text-light); margin-top: 1rem; }
         .auth-terms a { color: var(--blue); text-decoration: none; }
-
-        /* Success */
-        .success-box {
-          text-align: center;
-          padding: 2.5rem 1rem;
-          animation: fadeIn .4s ease both;
-        }
+        .success-box { text-align: center; padding: 2.5rem 1rem; animation: fadeIn .4s ease both; }
         .success-icon { font-size: 3rem; margin-bottom: 1rem; }
         .success-title { font-size: 1.3rem; font-weight: 700; color: var(--text-white); margin-bottom: .5rem; }
         .success-msg { font-size: .875rem; color: var(--text-light); }
-
-        /* ── Navbar (minimal) ── */
         .auth-nav {
           position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
           background: rgba(8,12,24,0.85);
@@ -421,10 +402,7 @@ export default function LoginPage() {
         }
         .nav-logo span { color: var(--blue); }
         .nav-links-mini { display: flex; gap: 1.25rem; }
-        .nav-links-mini a {
-          color: var(--text-light); font-size: .875rem; text-decoration: none;
-          transition: color .2s;
-        }
+        .nav-links-mini a { color: var(--text-light); font-size: .875rem; text-decoration: none; transition: color .2s; }
         .nav-links-mini a:hover { color: var(--text-white); }
         .nav-btn {
           background: var(--blue); color: #fff;
@@ -434,8 +412,6 @@ export default function LoginPage() {
           transition: background .2s;
         }
         .nav-btn:hover { background: #2563eb; }
-
-        /* ── Responsive ── */
         @media (max-width: 540px) {
           .auth-card { padding: 1.75rem 1.25rem; border-radius: 16px; }
           .field-row { grid-template-columns: 1fr; }
