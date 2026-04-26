@@ -1,9 +1,97 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import axios from "axios";
 import { formatINR } from "@/lib/carData";
 
-const API = "https://autodrive-mzfo.onrender.com";
+const API = "https://khandelwalneev-cars-price-api.hf.space";
+
+// ─── HARDCODE YOUR OPTIONS HERE ──────────────────────────────
+// Fill these with values from your training data
+const REGIONS = [
+  "Mumbai",
+  "Delhi",
+  "Bangalore",
+  "Chennai",
+  "Hyderabad",
+  "Pune",
+  "Kolkata",
+  "Ahmedabad",
+  "Jaipur",
+];
+
+const MANUFACTURERS = [
+  "Maruti",
+  "Hyundai",
+  "Honda",
+  "Toyota",
+  "Tata",
+  "Mahindra",
+  "Ford",
+  "Volkswagen",
+  "Skoda",
+  "Kia",
+  "MG",
+  "Renault",
+  "Nissan",
+  "BMW",
+  "Mercedes-Benz",
+  "Audi",
+];
+
+// Add all models you know your model was trained on
+const MODELS_BY_MAKE: Record<string, string[]> = {
+  Maruti: [
+    "Swift",
+    "Dzire",
+    "Baleno",
+    "Alto",
+    "WagonR",
+    "Vitara Brezza",
+    "Ertiga",
+    "Celerio",
+  ],
+  Hyundai: ["i20", "Creta", "Verna", "i10", "Tucson", "Venue", "Aura"],
+  Honda: ["City", "Amaze", "WR-V", "Jazz", "CR-V"],
+  Toyota: ["Innova", "Fortuner", "Etios", "Corolla", "Camry"],
+  Tata: ["Nexon", "Harrier", "Safari", "Altroz", "Tiago", "Tigor"],
+  Mahindra: ["Scorpio", "XUV500", "Bolero", "XUV300", "Thar"],
+  Ford: ["EcoSport", "Endeavour", "Figo", "Aspire"],
+  Volkswagen: ["Polo", "Vento", "Tiguan", "Taigun"],
+  Skoda: ["Octavia", "Superb", "Rapid", "Kushaq"],
+  Kia: ["Seltos", "Sonet", "Carnival"],
+  MG: ["Hector", "ZS EV", "Astor", "Gloster"],
+  Renault: ["Kwid", "Duster", "Triber"],
+  Nissan: ["Magnite", "Kicks", "Terrano"],
+  BMW: ["3 Series", "5 Series", "X1", "X3", "X5"],
+  "Mercedes-Benz": ["C-Class", "E-Class", "GLA", "GLC"],
+  Audi: ["A4", "A6", "Q3", "Q5", "Q7"],
+};
+
+const FUEL_TYPES = ["petrol", "diesel", "cng", "electric", "hybrid"];
+const TRANSMISSIONS = ["manual", "automatic"];
+const BODY_TYPES = [
+  "sedan",
+  "hatchback",
+  "suv",
+  "muv",
+  "coupe",
+  "convertible",
+  "pickup",
+];
+const DRIVETRAINS = ["fwd", "rwd", "awd", "4wd"];
+const SEATS = [2, 4, 5, 6, 7, 8, 9];
+const ENGINE_CCS = [
+  600, 800, 1000, 1197, 1248, 1298, 1373, 1498, 1497, 1582, 1598, 1799, 1968,
+  1991, 2000, 2179, 2198, 2393, 2494, 2755, 2999,
+];
+const CYLINDERS = [2, 3, 4, 5, 6, 8];
+const MAX_POWERS = [
+  40, 50, 60, 67, 70, 75, 80, 82, 83, 86, 88, 90, 100, 105, 110, 115, 118, 120,
+  130, 140, 148, 150, 160, 163, 170, 180, 184, 190, 197, 200, 220, 245, 252,
+  265, 282, 300, 340, 380, 402,
+];
+
+// ─────────────────────────────────────────────────────────────
 
 interface BreakdownItem {
   l: string;
@@ -17,18 +105,7 @@ interface PredictResult {
   confidence: number;
   breakdown: BreakdownItem[];
 }
-interface CascadeOptions {
-  fuels: string[];
-  engine_ccs: (number | string)[];
-  cylinders: (number | string)[];
-  max_powers: (number | string)[];
-  transmissions: string[];
-  body_types: string[];
-  drivetrains: string[];
-  seats: (number | string)[];
-}
 
-/* ── tiny helpers ─────────────────────────────── */
 function Field({
   label,
   children,
@@ -73,15 +150,7 @@ function Sel({
   );
 }
 
-/* ── main component ───────────────────────────── */
 export default function PredictPage() {
-  // top-level options (loaded once)
-  const [regions, setRegions] = useState<string[]>([]);
-  const [manufacturers, setManufacturers] = useState<string[]>([]);
-  const [models, setModels] = useState<string[]>([]);
-  const [cascade, setCascade] = useState<Partial<CascadeOptions>>({});
-
-  // form state
   const [region, setRegion] = useState("");
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -96,7 +165,6 @@ export default function PredictPage() {
   const [km, setKm] = useState(45000);
   const [age, setAge] = useState(7);
 
-  // UI state
   const [result, setResult] = useState<PredictResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -106,40 +174,11 @@ export default function PredictPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  /* ── load regions + manufacturers once ─────── */
-  useEffect(() => {
-    axios
-      .get(`${API}/predict/options`)
-      .then(({ data }) => {
-        if (data.success) {
-          setRegions(data.regions);
-          setManufacturers(data.manufacturers);
-        }
-      })
-      .catch(() => showToast("⚠️ Could not reach the prediction server."));
-  }, []);
+  const isElectric = fuel === "electric";
 
-  /* ── load models when manufacturer changes ── */
-  useEffect(() => {
-    if (!make) {
-      setModels([]);
-      setModel("");
-      setCascade({});
-      return;
-    }
-    axios
-      .get(`${API}/predict/models`, { params: { manufacturer: make } })
-      .then(({ data }) => {
-        if (data.success) setModels(data.models);
-      });
-    // reset downstream
+  const handleMakeChange = useCallback((v: string) => {
+    setMake(v);
     setModel("");
-    setCascade({});
-    clearModelFields();
-  }, [make]);
-
-  /* ── load cascade options when model changes ─ */
-  const clearModelFields = useCallback(() => {
     setFuel("");
     setEngineCC("");
     setCylinders("");
@@ -150,33 +189,12 @@ export default function PredictPage() {
     setSeats("");
   }, []);
 
-  useEffect(() => {
-    if (!make || !model) {
-      setCascade({});
-      clearModelFields();
-      return;
-    }
-    axios
-      .get(`${API}/predict/models`, {
-        params: { manufacturer: make, model },
-      })
-      .then(({ data }) => {
-        if (data.success && data.options) setCascade(data.options);
-      });
-    clearModelFields();
-  }, [model, make, clearModelFields]);
-
-  /* ── electric shortcut ──────────────────────── */
-  const isElectric = fuel === "electric";
-
-  /* ── submit ─────────────────────────────────── */
   const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!region || !make || !fuel) {
       showToast("⚠️ Please fill Region, Manufacturer & Fuel Type");
       return;
     }
-
     setLoading(true);
     setResult(null);
     try {
@@ -195,7 +213,6 @@ export default function PredictPage() {
         km_driven: km,
         age,
       });
-
       if (data.success) {
         setResult(data.result);
       } else {
@@ -205,14 +222,13 @@ export default function PredictPage() {
       if (axios.isAxiosError(err) && err.response?.data?.error) {
         showToast("❌ " + err.response.data.error);
       } else {
-        showToast("❌ Network or server error — is the Flask server running?");
+        showToast("❌ Network or server error");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  /* ── render ──────────────────────────────────── */
   return (
     <>
       <div className="page-hero" style={{ paddingBottom: "4rem" }}>
@@ -238,118 +254,104 @@ export default function PredictPage() {
       <div className="predict-page-wrap" style={{ paddingTop: "2.5rem" }}>
         <div className="container">
           <div className="predict-inner">
-            {/* ── FORM ── */}
             <div className="predict-form-card">
               <h2>Tell Us About Your Car</h2>
-
               <form onSubmit={handlePredict}>
                 <Field label="Region">
                   <Sel
                     value={region}
                     onChange={setRegion}
-                    items={regions}
+                    items={REGIONS}
                     placeholder="Select City / Region"
                   />
                 </Field>
-
                 <Field label="Manufacturer">
                   <Sel
                     value={make}
-                    onChange={setMake}
-                    items={manufacturers}
+                    onChange={handleMakeChange}
+                    items={MANUFACTURERS}
                     placeholder="Select Manufacturer"
                   />
                 </Field>
-
                 <Field label="Car Model">
                   <Sel
                     value={model}
                     onChange={setModel}
-                    items={models}
+                    items={make ? (MODELS_BY_MAKE[make] ?? []) : []}
                     placeholder={
                       make ? "Select Model" : "Select manufacturer first"
                     }
                     disabled={!make}
                   />
                 </Field>
-
                 <Field label="Fuel Type">
                   <Sel
                     value={fuel}
                     onChange={setFuel}
-                    items={cascade.fuels ?? []}
-                    placeholder={model ? "Select Fuel" : "Select model first"}
-                    disabled={!model}
+                    items={FUEL_TYPES}
+                    placeholder="Select Fuel Type"
                   />
                 </Field>
-
                 {!isElectric && (
                   <>
                     <Field label="Engine CC">
                       <Sel
                         value={engineCC}
                         onChange={setEngineCC}
-                        items={cascade.engine_ccs ?? []}
+                        items={ENGINE_CCS}
                         disabled={!fuel}
                       />
                     </Field>
-
                     <Field label="Cylinders">
                       <Sel
                         value={cylinders}
                         onChange={setCylinders}
-                        items={cascade.cylinders ?? []}
+                        items={CYLINDERS}
                         disabled={!fuel}
                       />
                     </Field>
                   </>
                 )}
-
                 <Field label="Max Power (bhp)">
                   <Sel
                     value={power}
                     onChange={setPower}
-                    items={cascade.max_powers ?? []}
+                    items={MAX_POWERS}
                     disabled={!fuel}
                   />
                 </Field>
-
                 <Field label="Transmission">
                   <Sel
                     value={transmission}
                     onChange={setTransmission}
-                    items={cascade.transmissions ?? []}
+                    items={TRANSMISSIONS}
                     disabled={!fuel}
                   />
                 </Field>
-
                 <Field label="Body Type">
                   <Sel
                     value={body}
                     onChange={setBody}
-                    items={cascade.body_types ?? []}
+                    items={BODY_TYPES}
                     disabled={!fuel}
                   />
                 </Field>
-
                 <Field label="Drive Train">
                   <Sel
                     value={drivetrain}
                     onChange={setDrivetrain}
-                    items={cascade.drivetrains ?? []}
+                    items={DRIVETRAINS}
                     disabled={!fuel}
                   />
                 </Field>
-
                 <Field label="Seats">
                   <Sel
                     value={seats}
                     onChange={setSeats}
-                    items={cascade.seats ?? []}
+                    items={SEATS}
                     disabled={!fuel}
                   />
                 </Field>
-
                 <Field label={`KM Driven: ${km.toLocaleString("en-IN")} km`}>
                   <input
                     type="range"
@@ -360,7 +362,6 @@ export default function PredictPage() {
                     onChange={(e) => setKm(Number(e.target.value))}
                   />
                 </Field>
-
                 <Field label={`Age: ${age} year${age !== 1 ? "s" : ""}`}>
                   <input
                     type="range"
@@ -371,7 +372,6 @@ export default function PredictPage() {
                     onChange={(e) => setAge(Number(e.target.value))}
                   />
                 </Field>
-
                 <button
                   type="submit"
                   className="predict-submit-btn"
@@ -383,10 +383,8 @@ export default function PredictPage() {
               </form>
             </div>
 
-            {/* ── RESULT ── */}
             <div className="result-card">
               <h3>💡 Price Estimate</h3>
-
               {!result ? (
                 <div className="result-placeholder">
                   <div className="ph-icon">🚗</div>
@@ -404,7 +402,6 @@ export default function PredictPage() {
                   <div className="result-price-range">
                     Range: {formatINR(result.low)} — {formatINR(result.high)}
                   </div>
-
                   <div
                     className="confidence-bar-wrap"
                     style={{ margin: "1rem 0" }}
@@ -437,7 +434,6 @@ export default function PredictPage() {
                       {result.confidence}% confidence
                     </p>
                   </div>
-
                   <div className="breakdown-list" style={{ marginTop: "1rem" }}>
                     {(result.breakdown ?? []).map((item, i) => (
                       <div key={i} className="breakdown-item">
