@@ -229,8 +229,8 @@ export default function PredictPage() {
           </div>
           <h1 className="page-hero-title">Predict the Price of Your Car</h1>
           <p className="page-hero-sub">
-            Get an instant ₹ market valuation for your used car — accurate,
-            free, and India-specific.
+            Get an instant market valuation for your used car — accurate, free,
+            and India-specific.
           </p>
         </div>
       </div>
@@ -355,7 +355,7 @@ export default function PredictPage() {
                     type="number"
                     min={0}
                     max={300000}
-                    step={1000}
+                    step={1}
                     value={km === 0 ? "" : km}
                     onChange={(e) =>
                       setKm(e.target.value === "" ? "" : Number(e.target.value))
@@ -430,15 +430,6 @@ export default function PredictPage() {
                         }}
                       />
                     </div>
-                    <p
-                      style={{
-                        fontSize: ".8rem",
-                        color: "#64748b",
-                        marginTop: 4,
-                      }}
-                    >
-                      {result.confidence}% confidence
-                    </p>
                   </div>
 
                   <div className="breakdown-list" style={{ marginTop: "1rem" }}>

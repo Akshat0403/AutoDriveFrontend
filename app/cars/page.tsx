@@ -1,14 +1,19 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import carsData from '../All.json';
+import carsData from "../All.json";
 
 const CARS_PER_PAGE = 9;
 
 // ─── FORMAT INR ──────────────────────────────────────────────────────────────
-function formatINR(val: string | number | null | undefined): string {
+function formatINRs(val: string | number | null | undefined): string {
   const num = typeof val === "string" ? parseFloat(val) : (val ?? 0);
   if (!num || isNaN(num)) return "N/A";
+
+  // Abbreviate large values
+  if (num >= 10_000_000) return `₹${(num / 10_000_000).toFixed(2)} Cr`;
+  if (num >= 100_000) return `₹${(num / 100_000).toFixed(1)} L`;
+
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
@@ -230,7 +235,7 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
     ["Mileage", car.mileage_arai ?? "—"],
     ["Model", car.model ?? "—"],
     ["No of Owners", car.no_of_owner ?? "—"],
-    ["Price", formatINR(car.price)],
+    ["Price", formatINRs(car.price)],
     ["Rear Brake", car.rear_brake ?? "—"],
     ["Rear Tyre Size", car.rear_tyre_size ?? "—"],
     ["Registration Year", car.registration_year ?? "—"],
@@ -253,12 +258,10 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
   const imgList = car.all_images
     ? car.all_images
         .split(",")
-        .filter((u) =>
-          /\.(jpe?g|png|JPG)$/i.test(u.trim())
-        )
+        .filter((u) => /\.(jpe?g|png|JPG)$/i.test(u.trim()))
     : [];
   const [activeImg, setActiveImg] = useState(
-    car.thumbnails || car.bg_removed_img || ""
+    car.thumbnails || car.bg_removed_img || "",
   );
 
   return (
@@ -343,7 +346,11 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
                   ? `${Math.round(car.km_driven / 1000)}k km`
                   : "—",
               ],
-              [getFuelIcon(car.fuel_type), "Fuel", capitalize(car.fuel_type ?? "")],
+              [
+                getFuelIcon(car.fuel_type),
+                "Fuel",
+                capitalize(car.fuel_type ?? ""),
+              ],
               ["AT", "Transmission", capitalize(car.transmission ?? "")],
             ].map(([icon, label, val]) => (
               <div className="detail-spec" key={label}>
@@ -382,7 +389,7 @@ function CarModal({ car, onClose }: { car: ApiCar; onClose: () => void }) {
               >
                 Listed Price
               </div>
-              <div className="detail-price">{formatINR(car.price)}</div>
+              <div className="detail-price">{formatINRs(car.price)}</div>
             </div>
             <div className="detail-actions">
               <Link href="/booking" className="btn btn-outline btn-sm">
@@ -436,14 +443,14 @@ export default function CarsPage() {
     const mapped = (raw as JsonCar[]).map((c, i) => mapJsonCarToApiCar(c, i));
     setAllCars(mapped);
     const makes = Array.from(
-      new Set(mapped.map((c) => c.make).filter(Boolean))
+      new Set(mapped.map((c) => c.make).filter(Boolean)),
     ).sort();
     setAvailableMakes(makes);
     setMaxPrice(
       mapped.reduce((mx, c) => {
         const p = parseFloat(c.price) || 0;
         return p > mx ? p : mx;
-      }, 5000000)
+      }, 5000000),
     );
     setLoading(false);
   }, []);
@@ -476,13 +483,13 @@ export default function CarsPage() {
   const totalPages = Math.ceil(sortedCars.length / CARS_PER_PAGE);
   const pageCars = sortedCars.slice(
     (currentPage - 1) * CARS_PER_PAGE,
-    currentPage * CARS_PER_PAGE
+    currentPage * CARS_PER_PAGE,
   );
 
   const toggleArr = (
     arr: string[],
     setArr: (a: string[]) => void,
-    val: string
+    val: string,
   ) => {
     setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
     setCurrentPage(1);
@@ -509,7 +516,7 @@ export default function CarsPage() {
       ? `${(maxPrice / 10000000).toFixed(1)} Cr`
       : maxPrice >= 100000
         ? `${(maxPrice / 100000).toFixed(0)} L`
-        : formatINR(maxPrice);
+        : formatINRs(maxPrice);
 
   // ── JSX (identical to original — no changes below) ───────────────────────
   return (
@@ -719,12 +726,36 @@ export default function CarsPage() {
                     <div
                       key={i}
                       className="car-card"
-                      style={{ opacity: 0.4, animation: "pulse 1.5s ease-in-out infinite" }}
+                      style={{
+                        opacity: 0.4,
+                        animation: "pulse 1.5s ease-in-out infinite",
+                      }}
                     >
-                      <div style={{ height: 200, background: "rgba(255,255,255,0.06)", borderRadius: 12 }} />
+                      <div
+                        style={{
+                          height: 200,
+                          background: "rgba(255,255,255,0.06)",
+                          borderRadius: 12,
+                        }}
+                      />
                       <div style={{ padding: "1rem" }}>
-                        <div style={{ height: 14, background: "rgba(255,255,255,0.07)", borderRadius: 6, marginBottom: "0.5rem", width: "60%" }} />
-                        <div style={{ height: 18, background: "rgba(255,255,255,0.07)", borderRadius: 6, width: "80%" }} />
+                        <div
+                          style={{
+                            height: 14,
+                            background: "rgba(255,255,255,0.07)",
+                            borderRadius: 6,
+                            marginBottom: "0.5rem",
+                            width: "60%",
+                          }}
+                        />
+                        <div
+                          style={{
+                            height: 18,
+                            background: "rgba(255,255,255,0.07)",
+                            borderRadius: 6,
+                            width: "80%",
+                          }}
+                        />
                       </div>
                       <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.2} }`}</style>
                     </div>
@@ -734,11 +765,24 @@ export default function CarsPage() {
 
               {!loading && sortedCars.length === 0 && (
                 <div style={{ textAlign: "center", padding: "4rem 2rem" }}>
-                  <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔍</div>
-                  <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: ".5rem" }}>
+                  <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>
+                    🔍
+                  </div>
+                  <h3
+                    style={{
+                      fontSize: "1.3rem",
+                      fontWeight: 700,
+                      marginBottom: ".5rem",
+                    }}
+                  >
                     No Cars Found
                   </h3>
-                  <p style={{ color: "var(--text-light)", marginBottom: "1.5rem" }}>
+                  <p
+                    style={{
+                      color: "var(--text-light)",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
                     No cars match the selected filters. Try adjusting them.
                   </p>
                   {hasFilters && (
@@ -752,10 +796,15 @@ export default function CarsPage() {
               {!loading && pageCars.length > 0 && (
                 <div
                   className="cars-grid"
-                  style={viewMode === "list" ? { gridTemplateColumns: "1fr" } : {}}
+                  style={
+                    viewMode === "list" ? { gridTemplateColumns: "1fr" } : {}
+                  }
                 >
                   {pageCars.map((car) => (
-                    <div key={car.id || String(car.car_id)} className="car-card">
+                    <div
+                      key={car.id || String(car.car_id)}
+                      className="car-card"
+                    >
                       <div className="car-card-image">
                         <img
                           src={car.bg_removed_img || car.thumbnails}
@@ -763,13 +812,16 @@ export default function CarsPage() {
                           loading="lazy"
                           onError={(e) => {
                             const el = e.target as HTMLImageElement;
-                            if (el.src !== car.thumbnails) el.src = car.thumbnails;
+                            if (el.src !== car.thumbnails)
+                              el.src = car.thumbnails;
                           }}
                         />
                         <div className="img-overlay" />
                         {car.city && (
                           <div className="car-badge-overlay">
-                            <span className="car-badge badge-certified">{car.city}</span>
+                            <span className="car-badge badge-certified">
+                              {car.city}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -782,7 +834,12 @@ export default function CarsPage() {
                         </div>
                         <div className="car-specs-row">
                           <div className="car-spec-pill">
-                            <span>{(car.fuel_type || "").toLowerCase() === "electric" ? "EV" : "fuel"}</span>
+                            <span>
+                              {(car.fuel_type || "").toLowerCase() ===
+                              "electric"
+                                ? "EV"
+                                : "fuel"}
+                            </span>
                             {capitalize(car.fuel_type || "")}
                           </div>
                           <div className="car-spec-pill">
@@ -791,11 +848,15 @@ export default function CarsPage() {
                           </div>
                           <div className="car-spec-pill">
                             <span>km</span>
-                            {car.km_driven != null ? `${Math.round(car.km_driven / 1000)}k km` : "—"}
+                            {car.km_driven != null
+                              ? `${Math.round(car.km_driven / 1000)}k km`
+                              : "—"}
                           </div>
                         </div>
                         <div className="car-card-footer">
-                          <div className="car-price">{formatINR(car.price)}</div>
+                          <div className="car-price">
+                            {formatINRs(car.price)}
+                          </div>
                           <div className="car-actions">
                             <button
                               className="btn btn-outline btn-sm"
@@ -803,7 +864,10 @@ export default function CarsPage() {
                             >
                               Details
                             </button>
-                            <Link href="/booking" className="btn btn-primary btn-sm">
+                            <Link
+                              href="/booking"
+                              className="btn btn-primary btn-sm"
+                            >
                               Book Now
                             </Link>
                           </div>
@@ -826,23 +890,63 @@ export default function CarsPage() {
                   }}
                 >
                   <button
-                    onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setCurrentPage((p) => Math.max(1, p - 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={currentPage === 1}
-                    style={{ padding: "0.4rem 1rem", borderRadius: 9999, border: "1.5px solid var(--border)", background: "var(--bg-card)", color: "var(--text-white)", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.4 : 1 }}
+                    style={{
+                      padding: "0.4rem 1rem",
+                      borderRadius: 9999,
+                      border: "1.5px solid var(--border)",
+                      background: "var(--bg-card)",
+                      color: "var(--text-white)",
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                      opacity: currentPage === 1 ? 0.4 : 1,
+                    }}
                   >
                     Prev
                   </button>
 
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                    .filter(
+                      (p) =>
+                        p === 1 ||
+                        p === totalPages ||
+                        Math.abs(p - currentPage) <= 2,
+                    )
                     .map((p, idx, arr) => (
                       <span key={`page-${p}`} style={{ display: "contents" }}>
                         {idx > 0 && arr[idx - 1] !== p - 1 && (
-                          <span style={{ padding: "0.4rem 0.5rem", color: "var(--text-light)" }}>...</span>
+                          <span
+                            style={{
+                              padding: "0.4rem 0.5rem",
+                              color: "var(--text-light)",
+                            }}
+                          >
+                            ...
+                          </span>
                         )}
                         <button
-                          onClick={() => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                          style={{ width: "38px", height: "38px", borderRadius: "50%", border: `1.5px solid ${p === currentPage ? "var(--blue)" : "var(--border)"}`, background: p === currentPage ? "var(--blue)" : "var(--bg-card)", color: p === currentPage ? "white" : "var(--text-white)", fontSize: ".88rem", fontWeight: 600, cursor: "pointer" }}
+                          onClick={() => {
+                            setCurrentPage(p);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          style={{
+                            width: "38px",
+                            height: "38px",
+                            borderRadius: "50%",
+                            border: `1.5px solid ${p === currentPage ? "var(--blue)" : "var(--border)"}`,
+                            background:
+                              p === currentPage
+                                ? "var(--blue)"
+                                : "var(--bg-card)",
+                            color:
+                              p === currentPage ? "white" : "var(--text-white)",
+                            fontSize: ".88rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
                         >
                           {p}
                         </button>
@@ -850,9 +954,21 @@ export default function CarsPage() {
                     ))}
 
                   <button
-                    onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setCurrentPage((p) => Math.min(totalPages, p + 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={currentPage === totalPages}
-                    style={{ padding: "0.4rem 1rem", borderRadius: 9999, border: "1.5px solid var(--border)", background: "var(--bg-card)", color: "var(--text-white)", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.4 : 1 }}
+                    style={{
+                      padding: "0.4rem 1rem",
+                      borderRadius: 9999,
+                      border: "1.5px solid var(--border)",
+                      background: "var(--bg-card)",
+                      color: "var(--text-white)",
+                      cursor:
+                        currentPage === totalPages ? "not-allowed" : "pointer",
+                      opacity: currentPage === totalPages ? 0.4 : 1,
+                    }}
                   >
                     Next
                   </button>
@@ -863,7 +979,9 @@ export default function CarsPage() {
         </div>
       </section>
 
-      {modalCar && <CarModal car={modalCar} onClose={() => setModalCar(null)} />}
+      {modalCar && (
+        <CarModal car={modalCar} onClose={() => setModalCar(null)} />
+      )}
 
       <footer>
         <div className="container">
